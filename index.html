@@ -768,13 +768,17 @@ function noteHTML() {
     const timeBadge = timeRange(t) ? `<span class="note-time">${timeRange(t)}</span>` : '';
     const focusing = state.focus && state.focus.tid === t.id;
     const fs = focusSecToday(t.id);
+    const localLaunch = t.link && !/^https?:\/\//i.test(t.link); // 本机路径或 openapp:// → 🚀 启动+计时
     let focusCtrl = '';
-    if (!done) {
-      focusCtrl = `${focusing
-        ? `<span class="focus-timer" data-id="${t.id}">${fmtDur(focusSecToday(t.id))}</span><button class="focus-btn stop" data-action="focus-stop" data-id="${t.id}" title="结束专注">⏹</button>`
-        : `<button class="focus-btn" data-action="focus-start" data-id="${t.id}" title="开始专注计时">▶</button>`}`;
+    if (focusing) {
+      focusCtrl = `<span class="focus-timer" data-id="${t.id}">${fmtDur(focusSecToday(t.id))}</span><button class="focus-btn stop" data-action="focus-stop" data-id="${t.id}" title="结束专注">⏹</button>`;
+    } else if (localLaunch) {
+      focusCtrl = `<button class="focus-btn launch" data-action="launch-focus" data-id="${t.id}" title="🚀 启动绑定并自动计时">🚀</button>`;
+    } else {
+      focusCtrl = `<button class="focus-btn" data-action="focus-start" data-id="${t.id}" title="开始专注计时">▶</button>`;
     }
-    const linkBtn = t.link ? `<button class="note-link" data-action="open-link" data-id="${t.id}" title="${esc(t.link)}">🔗</button>` : '';
+    if (done) focusCtrl = ''; // 已完成的任务不再显示计时入口
+    const linkBtn = t.link && !localLaunch ? `<button class="note-link" data-action="open-link" data-id="${t.id}" title="${esc(t.link)}">🔗</button>` : '';
     let pill;
     if (t.type === 'check') {
       pill = done ? `✓ ${r.at ? fmtTime(r.at) : ''}` : '打卡';
@@ -1015,6 +1019,19 @@ main.addEventListener('click', e => {
     state.focus = { tid, start: Date.now() };
     saveState(); renderAll(); startTicker();
     toast(prevName ? `上一个专注已结算：${prevName}；开始专注，计时中…` : '开始专注，计时中…');
+  } else if (act === 'launch-focus') {
+    const t = state.tasks.find(x => x.id === el.dataset.id);
+    let l = (t.link || '').trim();
+    if (l) {
+      if (/^openapp:\/\//i.test(l)) location.href = l; // 走本机协议启动软件
+      else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(l)) window.open(l, '_blank');
+      else location.href = 'openapp://' + encodeURIComponent(l); // 本机路径 → 转协议
+    }
+    const tid = t.id;
+    if (state.focus && state.focus.tid !== tid) stopFocus();
+    state.focus = { tid, start: Date.now() };
+    saveState(); renderAll(); startTicker();
+    toast(l ? '🚀 已启动绑定，计时中…' : '开始专注，计时中…');
   } else if (act === 'focus-stop') {
     const tid = el.dataset.id;
     const t = state.tasks.find(x => x.id === tid);
@@ -1186,8 +1203,8 @@ function openTaskModal(editId) {
       </div></div>
     <div class="field"><label>地点（可选）</label>
       <input type="text" id="f-loc" value="${t && t.location ? esc(t.location) : ''}" placeholder="例如：实验室 / 会议室 / 健身房" maxlength="20"></div>
-    <div class="field"><label>关联链接（可选，清单里点 🔗 直接打开）</label>
-      <input type="text" id="f-link" value="${t && t.link ? esc(t.link) : ''}" placeholder="https://… 或 obsidian://… / vscode://… 等协议链接" maxlength="300"></div>
+    <div class="field"><label>绑定应用 / 关联链接（可选）</label>
+      <input type="text" id="f-link" value="${t && t.link ? esc(t.link) : ''}" placeholder="本机软件路径如 C:\Program Files\Typora\Typora.exe，或 https://、obsidian:// 链接" maxlength="300"></div>
     <div class="modal-actions">
       ${t ? '<button class="btn-ghost btn-danger" id="f-del">删除任务</button>' : ''}
       <button class="btn-ghost" id="f-cancel">取消</button>
@@ -1381,8 +1398,31 @@ function openGoalModal(editId) {
 }
 
 function openSettings() {
+  // 生成 openapp.reg：注册 openapp:// 协议（hex(1) 编码，免疫分号/引号/反斜杠转义问题）
+  function genRegContent() {
+    const PS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+    const cmd = '"' + PS + '" -NoProfile -WindowStyle Hidden -Command '
+      + '"& {param($u) $u=[uri]::UnescapeDataString($u); '
+      + "$p=$u -replace '^openapp://',''; "
+      + 'if($p){ Start-Process $p }}" "%1"';
+    const bytes = [];
+    const s = cmd + '\0';
+    for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); bytes.push(c & 255, c >> 8); }
+    const lines = [];
+    for (let i = 0; i < bytes.length; i += 20) {
+      lines.push(bytes.slice(i, i + 20).map(b => b.toString(16).padStart(2, '0')).join(','));
+    }
+    return ['Windows Registry Editor Version 5.00', '',
+      '[HKEY_CURRENT_USER\\Software\\Classes\\openapp]',
+      '@="URL:openapp Protocol"',
+      '"URL Protocol"=""', '',
+      '[HKEY_CURRENT_USER\\Software\\Classes\\openapp\\shell\\open\\command]',
+      '@=hex(1):' + lines.join(',\\\r\n  '), ''].join('\r\n');
+  }
   modalRoot.innerHTML = `<div class="overlay"><div class="modal">
     <h3>设置 & 数据<button class="close-x">✕</button></h3>
+    <div class="set-row"><div>💻 电脑一键启动应用（Windows · 可选）<div class="desc">一次性配置 openapp:// 协议后，绑定「本机软件路径」的任务（如 C:\...\Typora.exe）就能在清单里 🚀 一键启动并自动计时。步骤：下载 openapp.reg → 双击导入 → 弹窗点「是」。仅限 Windows 电脑，手机无需此配置。</div></div>
+      <button class="nav-btn" id="s-reg">下载 .reg</button></div>
     <div class="set-row"><div>导出备份<div class="desc">下载全部数据的 JSON 文件</div></div>
       <button class="nav-btn" id="s-export">导出</button></div>
     <div class="set-row"><div>导入备份<div class="desc">用备份文件覆盖当前数据</div></div>
@@ -1390,8 +1430,17 @@ function openSettings() {
       <input type="file" id="s-file" accept=".json" style="display:none"></div>
     <div class="set-row"><div>清空全部数据<div class="desc">删除所有任务与打卡记录</div></div>
       <button class="nav-btn btn-danger" id="s-clear">清空</button></div>
-    <div class="set-row"><div>数据存储<div class="desc">所有数据保存在本浏览器 localStorage 中，不会上传，请定期导出备份；换浏览器或清除浏览器数据前记得先导出。</div></div></div>
+    <div class="set-row"><div>数据存储<div class="desc">所有数据保存在本设备浏览器 localStorage 中，不会上传；换设备/换浏览器前请先导出备份。</div></div></div>
   </div></div>`;
+  modalRoot.querySelector('#s-reg').addEventListener('click', () => {
+    const blob = new Blob([genRegContent()], { type: 'application/octet-stream' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'openapp.reg';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('openapp.reg 已下载，双击导入注册表');
+  });
   modalRoot.querySelector('#s-export').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
