@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自律打卡</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2da44e">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="自律打卡">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { color-scheme: light dark; }
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #1f2328;
+    --muted: #656d76;
+    --border: #e4e7ec;
+    --accent: #2da44e;
+    --accent-weak: #e8f5ec;
+    --danger: #cf222e;
+    --shadow: 0 1px 3px rgba(0,0,0,.05), 0 4px 16px rgba(0,0,0,.05);
+    --l0: #ebedf0;
+    --l1: #9be9a8;
+    --l2: #40c463;
+    --l3: #30a14e;
+    --l4: #216e39;
+    --hm: 13px; --hmgap: 3px;
+  }
+  body.dark {
+    --bg: #0d1117;
+    --card: #161b22;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --border: #30363d;
+    --accent: #3fb950;
+    --accent-weak: #12261a;
+    --danger: #f85149;
+    --shadow: 0 1px 3px rgba(0,0,0,.45);
+    --l0: #1c2128;
+    --l1: #033a16;
+    --l2: #196c2e;
+    --l3: #2ea043;
+    --l4: #56d364;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    transition: background .2s, color .2s;
+  }
+  .app { max-width: 1060px; margin: 0 auto; padding: 16px 16px 60px; }
+
+  /* ---------- 顶栏 ---------- */
+  header.top {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 10px 0 16px;
+  }
+  .logo { font-size: 20px; font-weight: 700; margin-right: auto; white-space: nowrap; }
+  .top-actions { margin-left: auto; display: flex; gap: 8px; }
+  .icon-btn {
+    border: 1px solid var(--border); background: var(--card); color: var(--text);
+    border-radius: 10px; width: 36px; height: 36px; font-size: 16px; cursor: pointer;
+  }
+  .icon-btn:hover { border-color: var(--accent); }
+  .btn-primary {
+    border: none; background: var(--accent); color: #fff; border-radius: 10px;
+    padding: 8px 16px; font-size: 14px; cursor: pointer; font-weight: 600;
+  }
+  .btn-primary:hover { filter: brightness(1.08); }
+
+  /* ---------- 通用卡片 ---------- */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    background: var(--accent-weak); color: var(--accent);
+    padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  }
+
+  /* ---------- 顶部：计划+清单+热力图（左） 与 迷你日历/时间轴（右） ---------- */
+  .home-top { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+  .home-main { flex: 1 1 640px; min-width: 0; --hm: 10px; --hmgap: 2px; }
+  .home-duo { display: flex; gap: 18px; align-items: stretch; flex-wrap: wrap; }
+  .home-goals { flex: 1 1 330px; min-width: 0; display: flex; }
+  .home-goals .goals-card { flex: 1; }
+  .home-note-wrap { flex: 1 1 330px; min-width: 0; }
+  .home-duo .note { height: 100%; }
+  .home-main .home-heat { margin-top: 18px; }
+
+  /* ---------- 中长期计划 ---------- */
+  .goals-card { padding: 14px 16px; display: flex; flex-direction: column; }
+  .goals-head {
+    display: flex; align-items: baseline; gap: 8px;
+    border-bottom: 2px dashed var(--border); padding-bottom: 8px; margin-bottom: 10px;
+  }
+  .goals-title { font-weight: 800; font-size: 15px; }
+  .goals-count { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .goal-focus {
+    background: var(--accent-weak); border: 1px solid var(--accent);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
+  }
+  .goal-top { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .goal-name { font-weight: 700; font-size: 14.5px; }
+  .goal-top .chip { margin-left: auto; font-size: 11px; padding: 2px 9px; }
+  .goal-del { background: none; border: none; cursor: pointer; opacity: .45; font-size: 13px; padding: 2px; }
+  .goal-del:hover { opacity: 1; }
+  .goal-progress { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .goal-step {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 0; border-bottom: 1px dashed var(--border);
+  }
+  .goal-step .step-text { font-size: 13.5px; overflow-wrap: anywhere; }
+  .goal-step.done .step-text { text-decoration: line-through; opacity: .45; }
+  .goal-step-add input {
+    width: 100%; border: none; background: transparent; color: var(--text);
+    font-size: 13px; padding: 9px 0 3px; outline: none; font-family: inherit;
+  }
+  .goal-step-add input::placeholder { color: var(--muted); opacity: .7; }
+  .goal-row {
+    display: flex; align-items: center; gap: 8px; padding: 9px 4px;
+    border-bottom: 1px dashed var(--border); cursor: pointer;
+    font-size: 13.5px; border-radius: 8px;
+  }
+  .goal-row:hover { background: var(--accent-weak); }
+  .goal-row-meta { margin-left: auto; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+  .goal-row.done { opacity: .5; }
+  .goal-row.done .goal-row-name { text-decoration: line-through; }
+
+  /* ---------- 主页布局：热力图 + 日历/时间轴 ---------- */
+
+  /* ---------- 便利贴待办清单 ---------- */
+  .note {
+    background: #fff8a3; color: #4a4200;
+    border-radius: 6px; padding: 16px 16px 14px;
+    box-shadow: 0 8px 18px rgba(0,0,0,.18);
+    transform: rotate(-.8deg); position: relative;
+  }
+  .note::before {
+    content: ''; position: absolute; top: -10px; left: 50%;
+    transform: translateX(-50%) rotate(2deg);
+    width: 88px; height: 20px; background: rgba(255,255,255,.5);
+    border: 1px solid rgba(0,0,0,.05); box-shadow: 0 1px 3px rgba(0,0,0,.08);
+  }
+  body.dark .note { background: #4d4728; color: #f3edc8; }
+  .note-head {
+    display: flex; align-items: baseline; gap: 8px;
+    border-bottom: 2px dashed rgba(0,0,0,.14); padding-bottom: 8px; margin-bottom: 4px;
+  }
+  body.dark .note-head { border-bottom-color: rgba(255,255,255,.18); }
+  .note-title { font-weight: 800; font-size: 16px; }
+  .note-date { font-size: 12px; opacity: .6; }
+  .note-count { margin-left: auto; font-size: 12.5px; font-weight: 700; opacity: .85; }
+  .note-mgr {
+    border: none; background: transparent; color: inherit; cursor: pointer;
+    font-size: 14px; padding: 0 2px; opacity: .55;
+  }
+  .note-mgr:hover { opacity: 1; transform: rotate(45deg); display: inline-block; transition: transform .2s; }
+  .note-item {
+    display: flex; align-items: center; gap: 10px; padding: 9px 2px;
+    border-bottom: 1px dashed rgba(0,0,0,.08);
+  }
+  body.dark .note-item { border-bottom-color: rgba(255,255,255,.1); }
+  .note-item:last-of-type { border-bottom: none; }
+  .circle {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid currentColor; background: transparent; color: inherit;
+    cursor: pointer; flex-shrink: 0; position: relative; padding: 0; opacity: .7;
+    transition: transform .12s, opacity .12s;
+  }
+  .circle:hover { opacity: 1; transform: scale(1.12); }
+  .circle.just-done { animation: circlePop .35s ease; }
+  .circle.just-done::after { animation: checkPop .4s ease; }
+  @keyframes circlePop {
+    0% { transform: scale(.6); }
+    55% { transform: scale(1.3); }
+    100% { transform: scale(1); }
+  }
+  @keyframes checkPop {
+    0% { transform: scale(0) rotate(-40deg); opacity: 0; }
+    60% { transform: scale(1.4) rotate(10deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+  .spark {
+    position: fixed; z-index: 98; pointer-events: none;
+    font-size: 14px; line-height: 1; will-change: transform, opacity;
+    animation: sparkFly .7s ease-out forwards;
+  }
+  @keyframes sparkFly {
+    0% { transform: translate(-50%, -50%) scale(.4); opacity: 1; }
+    70% { opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1.1) rotate(120deg); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spark, .circle.just-done, .circle.just-done::after { animation: none; }
+  }
+  .note-item.done .circle { background: var(--accent); border-color: var(--accent); opacity: 1; }
+  .note-item.done .circle::after {
+    content: '✓'; position: absolute; inset: 0; display: flex;
+    align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #fff;
+  }
+  .note-name { font-size: 14.5px; overflow-wrap: anywhere; cursor: pointer; }
+  .note-name:hover { color: var(--accent); }
+  .note-link {
+    border: none; background: transparent; cursor: pointer;
+    font-size: 12px; padding: 0 1px; opacity: .6; text-decoration: none;
+  }
+  .note-link:hover { opacity: 1; }
+  .focus-btn {
+    width: 24px; height: 24px; border-radius: 50%;
+    border: 1.5px solid var(--accent); background: transparent; color: var(--accent);
+    font-size: 10px; cursor: pointer; flex-shrink: 0; line-height: 1; padding: 0;
+  }
+  .focus-btn:hover { background: var(--accent); color: #fff; }
+  .focus-btn.stop { border-color: var(--danger); color: var(--danger); }
+  .focus-btn.stop:hover { background: var(--danger); color: #fff; }
+  .focus-timer {
+    font-size: 12px; font-weight: 700; color: var(--accent);
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .note-item.focusing { box-shadow: inset 0 0 0 2px var(--accent); border-radius: 8px; }
+  .note-time {
+    font-size: 11px; color: var(--accent); background: var(--accent-weak);
+    padding: 1px 7px; border-radius: 999px; font-weight: 600; white-space: nowrap;
+  }
+  .tl-time {
+    font-size: 11px; color: var(--muted); background: var(--bg);
+    border: 1px solid var(--border); padding: 0 7px; border-radius: 999px;
+    font-weight: 600; white-space: nowrap; line-height: 1.6;
+  }
+  .note-item.done .note-name { text-decoration: line-through; opacity: .45; }
+  .note-pill {
+    margin-left: auto; flex-shrink: 0; font-size: 12px; color: inherit;
+    background: rgba(0,0,0,.07); border: none; padding: 3px 9px;
+    border-radius: 999px; font-family: inherit;
+  }
+  body.dark .note-pill { background: rgba(255,255,255,.12); }
+  button.note-pill { cursor: pointer; }
+  button.note-pill:hover { background: rgba(0,0,0,.13); }
+  body.dark button.note-pill:hover { background: rgba(255,255,255,.2); }
+  .note-item.done .note-pill { text-decoration: line-through; opacity: .5; }
+  .note-expand { padding: 6px 2px 12px 32px; }
+  .note-expand .stepper button { background: rgba(255,255,255,.4); border-color: rgba(0,0,0,.18); color: #4a4200; }
+  .note-expand .stepper input { background: rgba(255,255,255,.6); border-color: rgba(0,0,0,.18); color: #4a4200; }
+  .note-add {
+    margin-top: 10px; width: 100%; padding: 8px 0;
+    border: 2px dashed rgba(0,0,0,.16); border-radius: 8px;
+    background: transparent; color: inherit; opacity: .55;
+    cursor: pointer; font-size: 13.5px; font-family: inherit;
+  }
+  body.dark .note-add { border-color: rgba(255,255,255,.2); }
+  .note-add:hover { opacity: 1; border-color: var(--accent); color: var(--accent); }
+
+  .bar { height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width .25s; }
+  .stepper { display: flex; align-items: center; gap: 6px; }
+  .stepper button {
+    width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); font-size: 17px; cursor: pointer;
+  }
+  .stepper button:disabled { opacity: .35; cursor: default; }
+  .stepper button:not(:disabled):hover { border-color: var(--accent); color: var(--accent); }
+  .stepper input {
+    width: 74px; height: 32px; text-align: center; border: 1px solid var(--border);
+    border-radius: 9px; background: var(--card); color: var(--text); font-size: 14px;
+  }
+  .stepper .unit { color: var(--muted); font-size: 13px; }
+
+  /* ---------- 习惯管理弹窗 ---------- */
+  .habit-list { max-height: 46vh; overflow-y: auto; }
+  .habit-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 2px; border-bottom: 1px solid var(--border);
+  }
+  .habit-row:last-child { border-bottom: none; }
+  .habit-icon { font-size: 20px; }
+  .habit-info { flex: 1; min-width: 0; }
+  .habit-name { font-weight: 700; font-size: 14px; }
+  .habit-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .habit-act { background: none; border: none; cursor: pointer; opacity: .5; font-size: 14px; padding: 2px; }
+  .habit-act:hover { opacity: 1; }
+  .habit-score { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+  .habit-row.paused { opacity: .55; background: var(--bg); border-radius: 10px; padding-left: 8px; padding-right: 8px; }
+  .habit-paused { font-size: 11.5px; color: var(--danger); margin-top: 2px; font-weight: 600; }
+
+  /* ---------- 迷你日历 + 当日时间轴 ---------- */
+  .nav-btn {
+    border: 1px solid var(--border); background: var(--card); color: var(--text);
+    border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 13px;
+  }
+  .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .home-cal { flex: 0 0 280px; display: flex; flex-direction: column; gap: 12px; }
+  .mini-cal { padding: 13px 14px; }
+  .mc-head { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .mc-title { font-weight: 700; font-size: 14px; margin-right: auto; }
+  .mc-nav { padding: 1px 10px; font-size: 14px; line-height: 1.5; }
+  .mc-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .mc-wd { text-align: center; font-size: 10.5px; color: var(--muted); padding: 2px 0 4px; }
+  .mc-cell {
+    height: 33px; border-radius: 8px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; cursor: pointer;
+    border: 1px solid transparent; user-select: none; position: relative;
+  }
+  .mc-cell.has-dl.future { opacity: .8; }
+  .mc-star {
+    position: absolute; top: 0; right: 2px; font-size: 8px;
+    color: #9aa0a6; line-height: 1.5;
+  }
+  .mc-cell:hover { border-color: var(--accent); }
+  .mc-cell.future { opacity: .35; cursor: default; }
+  .mc-cell.future:hover { border-color: transparent; }
+  .mc-cell.today { border-color: var(--accent); }
+  .mc-cell.selected { background: var(--accent) !important; color: #fff; }
+  .mc-cell.alldone { background: var(--accent) !important; color: #fff; }
+  .mc-cell.alldone.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .mc-day { font-size: 12.5px; font-weight: 600; line-height: 1.2; }
+  .mc-pct { font-size: 9px; color: var(--muted); line-height: 1.3; }
+  .mc-cell.selected .mc-pct, .mc-cell.alldone .mc-pct { color: rgba(255,255,255,.85); }
+
+  .timeline-card { padding: 14px 16px; }
+  .tl-head { font-size: 13.5px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: baseline; gap: 8px; }
+  .tl-count { margin-left: auto; font-size: 11.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .tl-list { position: relative; padding-left: 20px; }
+  .tl-list::before {
+    content: ''; position: absolute; left: 5px; top: 7px; bottom: 7px;
+    width: 2px; background: var(--border); border-radius: 2px;
+  }
+  .tl-item { position: relative; padding-bottom: 14px; }
+  .tl-item:last-child { padding-bottom: 2px; }
+  .tl-item::before {
+    content: ''; position: absolute; left: -20px; top: 3px;
+    width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box;
+    background: var(--card); border: 2.5px solid var(--border);
+  }
+  .tl-item.done::before { border-color: var(--accent); background: var(--accent); }
+  .tl-line1 { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; font-weight: 600; }
+  .tl-item.done .tl-name { text-decoration: line-through; opacity: .55; }
+  .tl-status { margin-left: auto; font-size: 11.5px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+  .tl-item.done .tl-status { color: var(--accent); }
+  .tl-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .tl-empty { font-size: 12.5px; color: var(--muted); padding: 4px 0 2px; }
+
+  /* ---------- 热力图 ---------- */
+  .heat-card { padding: 18px; overflow-x: auto; }
+  .heat-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .heat-head h2 { font-size: 17px; margin-right: auto; }
+  .heat-scroll { display: inline-block; }
+  .hm-labels, .hm-grid { display: grid; grid-auto-flow: column; gap: var(--hmgap); }
+  .hm-labels { margin-bottom: 4px; }
+  .hm-labels span { font-size: 10px; color: var(--muted); white-space: nowrap; }
+  .hm-grid { grid-template-rows: repeat(7, var(--hm)); }
+  .hm-cell { width: var(--hm); height: var(--hm); border-radius: 3px; background: var(--l0); }
+  .hm-empty { width: var(--hm); height: var(--hm); background: transparent; }
+  .hm-l1 { background: var(--l1); } .hm-l2 { background: var(--l2); }
+  .hm-l3 { background: var(--l3); } .hm-l4 { background: var(--l4); }
+  .heat-stats { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+
+  #tooltip {
+    position: fixed; z-index: 99; pointer-events: none; display: none;
+    background: var(--text); color: var(--bg); font-size: 12px;
+    padding: 5px 10px; border-radius: 7px; box-shadow: var(--shadow);
+  }
+
+  /* ---------- 弹窗 ---------- */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 50;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal {
+    background: var(--card); color: var(--text); border-radius: 16px;
+    width: 100%; max-width: 430px; padding: 22px; max-height: 90vh; overflow-y: auto;
+    border: 1px solid var(--border);
+  }
+  .modal h3 { font-size: 17px; margin-bottom: 16px; display: flex; }
+  .modal .close-x { margin-left: auto; background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted); }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .field input[type=text], .field input[type=number], .field input[type=date],
+  .field input[type=time], .field select, .field textarea {
+    width: 100%; padding: 9px 11px; border: 1px solid var(--border); border-radius: 9px;
+    background: var(--bg); color: var(--text); font-size: 14px;
+  }
+  .field textarea { font-size: 13.5px; font-family: inherit; resize: vertical; line-height: 1.6; }
+  .emoji-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .emoji-grid button {
+    width: 34px; height: 34px; font-size: 18px; border-radius: 9px;
+    border: 1px solid var(--border); background: var(--bg); cursor: pointer;
+  }
+  .emoji-grid button.sel { border-color: var(--accent); background: var(--accent-weak); }
+  .radio-row { display: flex; gap: 8px; }
+  .radio-row label {
+    flex: 1; text-align: center; padding: 9px 0; border: 1px solid var(--border);
+    border-radius: 9px; cursor: pointer; font-size: 14px; color: var(--text); margin: 0;
+  }
+  .radio-row input { display: none; }
+  .radio-row label.sel { border-color: var(--accent); background: var(--accent-weak); color: var(--accent); font-weight: 700; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+  .btn-ghost {
+    flex: 1; padding: 10px 0; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); font-size: 14px; cursor: pointer;
+  }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger { color: var(--danger); border-color: var(--border); }
+  .btn-danger:hover { border-color: var(--danger); color: var(--danger); }
+  .btn-confirm {
+    flex: 2; padding: 10px 0; border-radius: 10px; border: none;
+    background: var(--accent); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .set-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+  }
+  .set-row:last-child { border-bottom: none; }
+  .set-row .desc { color: var(--muted); font-size: 12px; margin-top: 3px; }
+
+  /* ---------- 其他 ---------- */
+  .empty {
+    text-align: center; padding: 46px 20px; color: var(--muted);
+    background: var(--card); border: 1px dashed var(--border); border-radius: 14px; margin-top: 18px;
+  }
+  .empty .big { font-size: 34px; margin-bottom: 10px; }
+  .toast {
+    position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 9px 18px; border-radius: 999px;
+    font-size: 13.5px; z-index: 100; opacity: 0; transition: opacity .25s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 640px) {
+    .home-cal { flex-basis: 100%; }
+    .note { transform: none; }
+    .stepper { width: 100%; }
+    .stepper input { flex: 1; width: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="logo">🔥 自律打卡</div>
+    <div class="top-actions">
+      <button class="icon-btn" id="btnTheme" title="切换主题">🌙</button>
+      <button class="icon-btn" id="btnSettings" title="设置">⚙️</button>
+      <button class="btn-primary" id="btnAdd">＋ 新任务</button>
+    </div>
+  </header>
+  <main id="main"></main>
+</div>
+<div id="modalRoot"></div>
+<div id="tooltip"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* ================= 数据层 ================= */
+const STORE_KEY = 'selfDiscipline.v1';
+const EMOJIS = ['📚','📄','🚶','💪','🏃','💧','🧘','😴','🥗','✍️','🧹','💻','🎧','🌅','🎯'];
+
+function seedState() {
+  const today = todayISO();
+  return {
+    settings: { theme: 'light' },
+    tasks: [
+      { id: 't' + Date.now() + '1', name: '背单词',   icon: '📚', type: 'check', target: 1,    unit: '次', createdAt: today, deletedAt: null, start: null, end: null, location: '' },
+      { id: 't' + Date.now() + '2', name: '看一篇论文', icon: '📄', type: 'check', target: 1,    unit: '篇', createdAt: today, deletedAt: null, start: null, end: null, location: '' },
+      { id: 't' + Date.now() + '3', name: '走路',     icon: '🚶', type: 'num',   target: 1000, unit: '步', createdAt: today, deletedAt: null, start: null, end: null, location: '' },
+      { id: 't' + Date.now() + '4', name: '实验室组会', icon: '💻', type: 'check', target: 1,    unit: '次', createdAt: today, deletedAt: null, start: '20:00', end: '21:30', location: '实验室' },
+    ],
+    goals: [
+      {
+        id: 'g' + Date.now() + '1', name: '完成毕业论文', deadline: fmtDate(addDays(new Date(), 30)), createdAt: today, doneAt: null,
+        steps: [
+          { id: 's' + Date.now() + 'a', text: '确定选题与开题', done: true },
+          { id: 's' + Date.now() + 'b', text: '读完 10 篇核心文献', done: false },
+          { id: 's' + Date.now() + 'c', text: '完成初稿', done: false },
+          { id: 's' + Date.now() + 'd', text: '修改并定稿', done: false },
+        ],
+      },
+    ],
+    records: {},
+  };
+}
+let state;
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (Array.isArray(d.tasks) && d.records && typeof d.records === 'object') return d;
+    }
+  } catch (e) { /* 数据损坏时重置 */ }
+  return null;
+}
+function saveState() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+state = loadState() || seedState();
+if (!Array.isArray(state.goals)) state.goals = []; // 旧数据迁移
+state.tasks = state.tasks.filter(t => t.repeat !== 'once'); // 「仅某一天」已移除，清理旧的一次性任务
+state.tasks.forEach(t => { // 旧数据迁移：补齐开始/结束/地点字段
+  if (t.start === undefined) t.start = null;
+  if (t.end === undefined) t.end = null;
+  if (t.location === undefined) t.location = '';
+  if (t.link === undefined) t.link = '';
+});
+if (!state.focus) state.focus = null; // 当前专注中的任务 {tid, start}
+saveState();
+
+/* ================= 日期工具 ================= */
+function fmtDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function parseISO(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+function todayISO() { return fmtDate(new Date()); }
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate() + n); return x; }
+function mondayIndex(d) { return (d.getDay() + 6) % 7; } // 周一=0 ... 周日=6
+function fmtTime(ts) {
+  const d = new Date(ts);
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function dateTitle(iso) {
+  const d = parseISO(iso);
+  const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 · 星期${wd}`;
+}
+
+/* ================= 业务逻辑 ================= */
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function taskId() { return 't' + Date.now() + Math.random().toString(36).slice(2, 6); }
+
+/* ================= 打勾庆祝动画 ================= */
+function burstAt(rect, count) {
+  const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+  const n = count || 8;
+  const chars = ['✦', '✧', '⭐', '✨', '•'];
+  for (let i = 0; i < n; i++) {
+    const s = document.createElement('span');
+    s.className = 'spark';
+    s.textContent = chars[i % chars.length];
+    const angle = (Math.PI * 2 * i) / n + Math.random() * 0.6;
+    const dist = 24 + Math.random() * 26;
+    s.style.left = cx + 'px';
+    s.style.top = cy + 'px';
+    s.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+    s.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+    s.style.fontSize = (11 + Math.random() * 7) + 'px';
+    s.style.color = i % 2 ? 'var(--accent)' : '#f0b429';
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 800);
+  }
+}
+function celebrateCircle(sel) {
+  const circle = document.querySelector(sel);
+  if (!circle) return;
+  circle.classList.add('just-done');
+  burstAt(circle.getBoundingClientRect());
+}
+
+function tasksActiveOn(iso) {
+  return state.tasks.filter(t => {
+    if (t.createdAt > iso) return false;
+    if (t.deletedAt && iso > t.deletedAt) return false;
+    if (isPausedOn(t, iso)) return false; // 暂停期间不出现、不计数
+    return true;
+  });
+}
+function isPausedOn(t, iso) {
+  if (t.paused) return true; // 无限期暂停（手动恢复）
+  return !!(t.pausedUntil && iso <= t.pausedUntil); // 暂停至指定日期（含当天）
+}
+function byTime(a, b) { return (a.start || '99:99').localeCompare(b.start || '99:99'); }
+function timeRange(t) { return t.start ? `⏰ ${t.start}${t.end ? '–' + t.end : ''}` : ''; }
+
+/* ---------- 专注计时 ---------- */
+function focusElapsedSec(tid) {
+  return state.focus && state.focus.tid === tid ? Math.max(0, Math.floor((Date.now() - state.focus.start) / 1000)) : 0;
+}
+function focusSecToday(tid) {
+  const r = recOf(todayISO(), tid);
+  return ((r && r.focusSec) || 0) + focusElapsedSec(tid);
+}
+function fmtDur(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(s).padStart(2, '0');
+}
+function stopFocus() {
+  // 结束当前专注：累计时长入当天记录；定量「分钟」类任务自动换算进度
+  if (!state.focus) return;
+  const tid = state.focus.tid;
+  const sec = focusElapsedSec(tid);
+  const t = state.tasks.find(x => x.id === tid);
+  const iso = todayISO();
+  const r = recOf(iso, tid);
+  const patch = { focusSec: ((r && r.focusSec) || 0) + sec };
+  if (t && t.type === 'num' && /分钟/.test(t.unit)) {
+    patch.p = ((r ? r.p : 0) + Math.floor(sec / 60));
+  }
+  state.focus = null;
+  updateRecord(iso, tid, patch);
+}
+function recOf(iso, tid) { return (state.records[iso] || {})[tid] || null; }
+function pctOf(t, r) { return r ? Math.min(1, (r.p || 0) / t.target) : 0; }
+
+function dayStats(iso) {
+  const ts = tasksActiveOn(iso);
+  if (!ts.length) return { total: 0, done: 0, pct: 0, allDone: false };
+  let sum = 0, done = 0;
+  for (const t of ts) {
+    const r = recOf(iso, t.id);
+    sum += pctOf(t, r);
+    if (r && r.done) done++;
+  }
+  const pct = sum / ts.length;
+  return { total: ts.length, done, pct, allDone: done === ts.length };
+}
+
+function updateRecord(iso, tid, patch) {
+  if (!state.records[iso]) state.records[iso] = {};
+  const t = state.tasks.find(x => x.id === tid);
+  if (!t) return;
+  const cur = state.records[iso][tid] || { p: 0, done: false, at: null };
+  const next = Object.assign({}, cur, patch);
+  if (t.type === 'check') {
+    next.p = next.done ? t.target : 0;
+  } else {
+    next.p = Math.max(0, Math.min(Number(next.p) || 0, t.target));
+    next.done = next.p >= t.target;
+  }
+  if (next.done && !cur.at) next.at = Date.now();
+  if (!next.done) next.at = null;
+  next.updatedAt = Date.now();
+  state.records[iso][tid] = next;
+  saveState();
+}
+
+function numStep(target) { return target >= 1000 ? 100 : target >= 100 ? 10 : target >= 20 ? 5 : 1; }
+
+function calcStreak() {
+  let d = new Date();
+  if (!dayStats(fmtDate(d)).allDone) d = addDays(d, -1);
+  let n = 0;
+  const minISO = state.tasks.length ? state.tasks.map(t => t.createdAt).sort()[0] : todayISO();
+  while (fmtDate(d) >= minISO) {
+    if (!dayStats(fmtDate(d)).allDone) break;
+    n++; d = addDays(d, -1);
+  }
+  return n;
+}
+function totalDoneCount() {
+  let n = 0;
+  for (const iso in state.records)
+    for (const tid in state.records[iso])
+      if (state.records[iso][tid] && state.records[iso][tid].done) n++;
+  return n;
+}
+function rangeStats(startISO, endISO) {
+  if (!state.tasks.length) return { checked: 0, avgPct: 0, best: 0 };
+  let checked = 0, pctSum = 0, pctDays = 0, cur = 0, best = 0;
+  for (let d = parseISO(startISO); fmtDate(d) <= endISO; d = addDays(d, 1)) {
+    const st = dayStats(fmtDate(d));
+    if (!st.total) { cur = 0; continue; }
+    pctSum += st.pct; pctDays++;
+    if (st.allDone) { checked++; cur++; best = Math.max(best, cur); }
+    else cur = 0;
+  }
+  return { checked, avgPct: pctDays ? pctSum / pctDays : 0, best };
+}
+
+/* ================= 渲染 ================= */
+const main = document.getElementById('main');
+let calY = new Date().getFullYear(), calM = new Date().getMonth();
+let selDate = todayISO();
+let expandedId = null;
+let focusGoalId = null; // 为 null 时自动聚焦第一个进行中的计划
+
+/* ---------- 中长期计划 ---------- */
+function goalDone(g) { return g.steps.length > 0 && g.steps.every(s => s.done); }
+
+function deadlineText(g) {
+  if (!g.deadline) return '无截止日期';
+  const d = parseISO(g.deadline);
+  const md = `${d.getMonth() + 1}月${d.getDate()}日`;
+  const diff = Math.round((d - parseISO(todayISO())) / 86400000);
+  if (diff > 0) return `${md} · 剩 ${diff} 天`;
+  if (diff === 0) return `${md} · 今天截止`;
+  return `${md} · 已过 ${-diff} 天`;
+}
+
+function newStepId() { return 's' + Date.now() + Math.random().toString(36).slice(2, 5); }
+
+function goalsHTML() {
+  const goals = state.goals;
+  const active = goals.filter(g => !goalDone(g));
+  const cur = active[0] || null;
+  const focus = goals.find(g => g.id === focusGoalId) || cur;
+  let html = `<div class="card goals-card">
+    <div class="goals-head"><span class="goals-title">🎯 中长期计划</span>
+      <span class="goals-count">${active.length ? active.length + ' 个进行中' : '暂无进行中'}</span></div>`;
+  if (focus) {
+    const total = focus.steps.length;
+    const dn = focus.steps.filter(s => s.done).length;
+    const pct = total ? dn / total : 0;
+    html += `<div class="goal-focus">
+      <div class="goal-top">
+        <span class="goal-name">${esc(focus.name)}</span>
+        <span class="chip">${deadlineText(focus)}</span>
+        <button class="goal-del" data-action="goal-edit" data-id="${focus.id}" title="编辑">✏️</button>
+        <button class="goal-del" data-action="goal-del" data-id="${focus.id}" title="删除">🗑️</button>
+      </div>
+      <div class="bar"><div class="bar-fill" style="width:${(pct * 100).toFixed(0)}%"></div></div>
+      <div class="goal-progress">${total ? `${dn}/${total} 步 · ${Math.round(pct * 100)}%` : '还没拆分子任务'}${focus === cur ? ' · 当前目标' : ''}</div>
+      <div class="goal-steps">`;
+    for (const s of focus.steps) {
+      html += `<div class="goal-step ${s.done ? 'done' : ''}">
+        <button class="circle" data-action="goal-step" data-gid="${focus.id}" data-sid="${s.id}" title="${s.done ? '取消完成' : '标记完成'}"></button>
+        <span class="step-text">${esc(s.text)}</span>
+      </div>`;
+    }
+    html += `<div class="goal-step-add"><input type="text" placeholder="＋ 添加子任务，回车确认" data-input="goal-step" data-gid="${focus.id}" maxlength="40"></div>
+      </div>
+    </div>`;
+  }
+  for (const g of goals) {
+    if (focus && g.id === focus.id) continue;
+    const dn = g.steps.filter(s => s.done).length;
+    html += `<div class="goal-row ${goalDone(g) ? 'done' : ''}" data-action="goal-focus" data-id="${g.id}">
+      <span>${goalDone(g) ? '✅' : '🎯'}</span>
+      <span class="goal-row-name">${esc(g.name)}</span>
+      <span class="goal-row-meta">${dn}/${g.steps.length}${g.deadline ? ' · ' + deadlineText(g) : ''}</span>
+    </div>`;
+  }
+  if (!goals.length) {
+    html += `<div style="font-size:13px;color:var(--muted);padding:4px 0 8px">还没有计划。定一个目标，拆成子任务，逐个打勾推进吧</div>`;
+  }
+  html += `<button class="note-add" data-action="goal-add">＋ 新计划</button></div>`;
+  return html;
+}
+
+/* ---------- 主页：计划+清单+热力图（左） 与 迷你日历/时间轴（右） ---------- */
+function renderHome() {
+  main.innerHTML = `<div class="home-top">
+    <div class="home-main">
+      <div class="home-duo">
+        <div class="home-goals">${goalsHTML()}</div>
+        <div class="home-note-wrap">${noteHTML()}</div>
+      </div>
+      <div class="home-heat">${heatmapHTML()}</div>
+    </div>
+    <div class="home-cal">${miniCalHTML()}${timelineHTML()}</div>
+  </div>`;
+}
+
+function noteHTML() {
+  const iso = todayISO();
+  const st = dayStats(iso);
+  const now = new Date();
+  const tasks = tasksActiveOn(iso).slice().sort(byTime);
+  let items = '';
+  for (const t of tasks) {
+    const r = recOf(iso, t.id);
+    const done = !!(r && r.done);
+    const p = r ? r.p : 0;
+    const timeBadge = timeRange(t) ? `<span class="note-time">${timeRange(t)}</span>` : '';
+    const focusing = state.focus && state.focus.tid === t.id;
+    const fs = focusSecToday(t.id);
+    let focusCtrl = '';
+    if (!done) {
+      focusCtrl = `${focusing
+        ? `<span class="focus-timer" data-id="${t.id}">${fmtDur(focusSecToday(t.id))}</span><button class="focus-btn stop" data-action="focus-stop" data-id="${t.id}" title="结束专注">⏹</button>`
+        : `<button class="focus-btn" data-action="focus-start" data-id="${t.id}" title="开始专注计时">▶</button>`}`;
+    }
+    const linkBtn = t.link ? `<button class="note-link" data-action="open-link" data-id="${t.id}" title="${esc(t.link)}">🔗</button>` : '';
+    let pill;
+    if (t.type === 'check') {
+      pill = done ? `✓ ${r.at ? fmtTime(r.at) : ''}` : '打卡';
+      items += `<div class="note-item ${done ? 'done' : ''} ${focusing ? 'focusing' : ''}">
+        <button class="circle" data-action="toggle" data-id="${t.id}" title="${done ? '取消完成' : '标记完成'}"></button>
+        <span class="note-name" data-action="edit-task" data-id="${t.id}" title="点击编辑">${esc(t.name)}</span>${timeBadge}${linkBtn}
+        <span class="note-pill">${pill}</span>${focusCtrl}
+      </div>`;
+    } else {
+      const expanded = expandedId === t.id;
+      pill = done ? `✓ ${r.at ? fmtTime(r.at) : ''}` : `${p}/${t.target} ${esc(t.unit)}`;
+      const fsTxt = fs ? (focusing
+        ? `<span class="focus-timer" data-id="${t.id}">${fmtDur(fs)}</span>`
+        : `<span style="font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums">⏱ ${fmtDur(fs)}</span>`) : '';
+      items += `<div class="note-item ${done ? 'done' : ''} ${focusing ? 'focusing' : ''}">
+        <button class="circle" data-action="toggle" data-id="${t.id}" title="${done ? '取消完成' : '标记完成'}"></button>
+        <span class="note-name" data-action="edit-task" data-id="${t.id}" title="点击编辑">${esc(t.name)}</span>${timeBadge}${linkBtn}
+        ${fsTxt}
+        <button class="note-pill" data-action="expand" data-id="${t.id}" title="记录进度">${pill}</button>
+        ${focusing ? `<button class="focus-btn stop" data-action="focus-stop" data-id="${t.id}" title="结束专注">⏹</button>` : focusCtrl}
+      </div>`;
+      if (expanded) {
+        const step = numStep(t.target);
+        items += `<div class="note-expand"><div class="stepper">
+          <button data-action="step" data-id="${t.id}" data-delta="-${step}" ${p <= 0 ? 'disabled' : ''}>−</button>
+          <input type="number" min="0" max="${t.target}" value="${p}" data-input="progress" data-id="${t.id}">
+          <button data-action="step" data-id="${t.id}" data-delta="${step}" ${p >= t.target ? 'disabled' : ''}>＋</button>
+          <span class="unit">${esc(t.unit)} · 目标 ${t.target}</span>
+        </div><div class="bar" style="margin-top:8px"><div class="bar-fill" style="width:${(pctOf(t, r) * 100).toFixed(1)}%"></div></div></div>`;
+      }
+    }
+  }
+  if (!tasks.length) {
+    items = `<div style="padding:16px 2px;font-size:13.5px;opacity:.6">今天还没有任务，点下方「＋ 添加任务」创建一个吧</div>`;
+  }
+  return `<div class="note">
+    <div class="note-head">
+      <span class="note-title">📌 今日清单</span>
+      <span class="note-date">${now.getMonth() + 1}月${now.getDate()}日</span>
+      <span class="note-count">${st.done}/${st.total} 完成 · ${Math.round(st.pct * 100)}%</span>
+      <button class="note-mgr" data-action="open-habits" title="习惯管理">⚙</button>
+    </div>
+    ${items}
+    <button class="note-add" data-action="open-add">＋ 添加任务</button>
+  </div>`;
+}
+
+/* ---------- 迷你日历 + 当日时间轴 ---------- */
+function miniCalHTML() {
+  // 收集未完成计划的截止日期 → 该日期格显示灰色小星星
+  const deadlines = {};
+  for (const g of state.goals) {
+    if (g.deadline && !goalDone(g)) (deadlines[g.deadline] = deadlines[g.deadline] || []).push(g.name);
+  }
+  const first = new Date(calY, calM, 1);
+  const off = mondayIndex(first);
+  const daysInMonth = new Date(calY, calM + 1, 0).getDate();
+  const wds = ['一', '二', '三', '四', '五', '六', '日'];
+  let cells = wds.map(w => `<div class="mc-wd">${w}</div>`).join('');
+  for (let i = 0; i < off; i++) cells += '<div></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = fmtDate(new Date(calY, calM, d));
+    const st = dayStats(iso);
+    const future = iso > todayISO();
+    const dlNames = deadlines[iso];
+    const cls = ['mc-cell'];
+    if (iso === todayISO()) cls.push('today');
+    if (iso === selDate) cls.push('selected');
+    if (st.allDone && st.total) cls.push('alldone');
+    if (future) cls.push('future');
+    if (dlNames) cls.push('has-dl');
+    const tint = st.total && !future && st.pct > 0 && !st.allDone
+      ? ` style="background:rgba(64,196,99,${(st.pct * 0.35).toFixed(2)})"` : '';
+    cells += `<div class="${cls.join(' ')}"${tint} data-action="sel-day" data-date="${iso}"${dlNames ? ` title="🎯 截止：${esc(dlNames.join('、'))}"` : ''}>
+      <div class="mc-day">${d}</div>
+      <div class="mc-pct">${st.total ? Math.round(st.pct * 100) + '%' : '·'}</div>
+      ${dlNames ? '<span class="mc-star">★</span>' : ''}
+    </div>`;
+  }
+  return `<div class="card mini-cal">
+    <div class="mc-head">
+      <span class="mc-title">${calY}年${calM + 1}月</span>
+      <button class="nav-btn mc-nav" data-action="cal-prev" title="上个月">‹</button>
+      <button class="nav-btn mc-nav" data-action="cal-next" title="下个月">›</button>
+    </div>
+    <div class="mc-grid">${cells}</div>
+  </div>`;
+}
+
+function timelineHTML() {
+  const d = parseISO(selDate);
+  const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+  const ts = tasksActiveOn(selDate).slice().sort(byTime);
+  let items = '';
+  for (const t of ts) {
+    const r = recOf(selDate, t.id);
+    const done = !!(r && r.done);
+    let status, sub;
+    if (done) {
+      status = r.at ? fmtTime(r.at) : '✓';
+      sub = t.type === 'check' ? '已完成' : `完成 ${r.p}/${t.target} ${esc(t.unit)}`;
+    } else if (t.type === 'check') {
+      status = '未打卡'; sub = '待完成';
+    } else {
+      status = Math.round(pctOf(t, r) * 100) + '%';
+      sub = `进度 ${(r ? r.p : 0)}/${t.target} ${esc(t.unit)}`;
+    }
+    const fs = (r && r.focusSec) || 0;
+    if (fs) sub += ` · ⏱ 用时 ${Math.round(fs / 60)} 分钟`;
+    items += `<div class="tl-item ${done ? 'done' : ''}">
+      <div class="tl-line1"><span class="tl-name">${t.icon} ${esc(t.name)}</span>${timeRange(t) ? `<span class="tl-time">${timeRange(t)}</span>` : ''}<span class="tl-status">${status}</span></div>
+      <div class="tl-sub">${t.location ? `📍 ${esc(t.location)} · ` : ''}${sub}</div>
+    </div>`;
+  }
+  if (!ts.length) items = `<div class="tl-empty">当天没有安排任务</div>`;
+  const st = dayStats(selDate);
+  return `<div class="card timeline-card">
+    <div class="tl-head">📅 ${d.getMonth() + 1}月${d.getDate()}日 · 星期${wd}
+      ${ts.length ? `<span class="tl-count">${st.done}/${st.total} 完成</span>` : ''}
+    </div>
+    <div class="tl-list">${items}</div>
+  </div>`;
+}
+
+function levelClass(st) {
+  if (!st.total) return 'hm-cell';
+  const p = st.pct;
+  if (p <= 0) return 'hm-cell';
+  if (p < 0.4) return 'hm-cell hm-l1';
+  if (p < 0.7) return 'hm-cell hm-l2';
+  if (p < 1) return 'hm-cell hm-l3';
+  return 'hm-cell hm-l4';
+}
+
+function heatmapHTML() {
+  // 近一年滚动窗口：从本周周一往前推 53 周，右侧不会再有大片未来空白
+  const weeks = 53;
+  const start = addDays(addDays(new Date(), -mondayIndex(new Date())), -7 * (weeks - 1));
+  const startISO = fmtDate(start);
+  const todayStr = todayISO();
+
+  // 月份标签：取每周四所在月份，换月时标注
+  const labels = new Array(weeks).fill('');
+  let lastM = -1;
+  for (let w = 0; w < weeks; w++) {
+    const thursday = addDays(start, w * 7 + 3);
+    if (fmtDate(thursday) > todayStr) continue; // 未来周不标注月份
+    const m = thursday.getMonth();
+    if (m !== lastM) { labels[w] = (m + 1) + '月'; lastM = m; }
+  }
+  if (weeks > 1) labels[0] = ''; // 窗口首周不标月份，避免与次月标签挤在一起
+
+  let labelHTML = '';
+  for (let w = 0; w < weeks; w++) labelHTML += `<span>${labels[w]}</span>`;
+
+  let gridHTML = '';
+  for (let w = 0; w < weeks; w++) {
+    for (let d = 0; d < 7; d++) {
+      const iso = fmtDate(addDays(start, w * 7 + d));
+      if (iso > todayStr) { gridHTML += '<div class="hm-empty"></div>'; continue; }
+      const st = dayStats(iso);
+      const tip = st.total
+        ? `${iso} · 完成 ${Math.round(st.pct * 100)}%（${st.done}/${st.total} 项）${st.allDone ? ' 🎉' : ''}`
+        : `${iso} · 无任务`;
+      gridHTML += `<div class="${levelClass(st)}" data-tip="${tip}"></div>`;
+    }
+  }
+
+  const ys = rangeStats(startISO, todayStr);
+  return `<div class="card heat-card">
+    <div class="heat-head">
+      <h2>近一年自律热力图</h2>
+    </div>
+    <div class="chips heat-stats">
+      <span class="chip">🔥 全勤打卡 ${ys.checked} 天</span>
+      <span class="chip">📈 平均完成率 ${Math.round(ys.avgPct * 100)}%</span>
+      <span class="chip">⭐ 最长连续 ${ys.best} 天</span>
+    </div>
+    <div class="heat-scroll">
+      <div class="hm-labels" style="grid-template-columns: repeat(${weeks}, var(--hm)); margin-left:1px;">${labelHTML}</div>
+      <div class="hm-grid" style="grid-auto-columns: var(--hm);">${gridHTML}</div>
+    </div>
+  </div>`;
+}
+
+function renderAll() {
+  renderHome();
+}
+
+/* 每秒刷新专注中的计时显示（只改文本，不重渲染） */
+let tickerTimer = null;
+function startTicker() {
+  if (tickerTimer) return;
+  tickerTimer = setInterval(() => {
+    if (!state.focus) { clearInterval(tickerTimer); tickerTimer = null; return; }
+    const el = document.querySelector(`.focus-timer[data-id="${state.focus.tid}"]`);
+    if (el) el.textContent = fmtDur(focusSecToday(state.focus.tid));
+  }, 1000);
+}
+
+/* ================= 事件：主区域 ================= */
+main.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) return;
+  const act = el.dataset.action;
+  if (act === 'toggle') {
+    const iso = todayISO(), t = state.tasks.find(x => x.id === el.dataset.id);
+    const r = recOf(iso, t.id);
+    const wasDone = !!(r && r.done);
+    const allDoneBefore = dayStats(iso).allDone;
+    if (state.focus && state.focus.tid === t.id) stopFocus(); // 打卡时结束该任务的专注并结算
+    if (t.type === 'check') updateRecord(iso, t.id, { done: !wasDone });
+    else updateRecord(iso, t.id, { p: wasDone ? 0 : t.target });
+    renderAll();
+    if (!wasDone) {
+      celebrateCircle(`.note-item .circle[data-id="${t.id}"]`);
+      if (!allDoneBefore && dayStats(iso).allDone) {
+        toast('🎉 今日任务全部完成，太棒了！');
+        const head = document.querySelector('.note-head');
+        if (head) burstAt(head.getBoundingClientRect(), 14);
+      }
+    }
+  } else if (act === 'expand') {
+    expandedId = expandedId === el.dataset.id ? null : el.dataset.id;
+    renderAll();
+  } else if (act === 'open-add') {
+    openTaskModal();
+  } else if (act === 'open-habits') {
+    openHabitsModal();
+  } else if (act === 'focus-start') {
+    const tid = el.dataset.id;
+    let prevName = '';
+    if (state.focus && state.focus.tid !== tid) {
+      const prev = state.tasks.find(x => x.id === state.focus.tid);
+      prevName = prev ? prev.name : '';
+      stopFocus();
+    }
+    state.focus = { tid, start: Date.now() };
+    saveState(); renderAll(); startTicker();
+    toast(prevName ? `上一个专注已结算：${prevName}；开始专注，计时中…` : '开始专注，计时中…');
+  } else if (act === 'focus-stop') {
+    const tid = el.dataset.id;
+    const t = state.tasks.find(x => x.id === tid);
+    const sec = focusElapsedSec(tid);
+    stopFocus(); renderAll();
+    if (t && t.type === 'num' && /分钟/.test(t.unit)) toast(`专注 ${fmtDur(sec)}，进度 +${Math.floor(sec / 60)} ${t.unit}`);
+    else toast(`专注结束，用时 ${fmtDur(sec)}`);
+  } else if (act === 'open-link') {
+    const t = state.tasks.find(x => x.id === el.dataset.id);
+    if (/^[a-z][a-z0-9+.-]*:/i.test(t.link || '')) window.open(t.link, '_blank');
+    else if (navigator.clipboard) {
+      navigator.clipboard.writeText(t.link || '').then(
+        () => toast('浏览器无法直接打开本地文件，路径已复制'),
+        () => toast('该链接无法打开')
+      );
+    } else toast('该链接无法打开');
+  } else if (act === 'edit-task') {
+    openTaskModal(el.dataset.id);
+  } else if (act === 'goal-step') {
+    const g = state.goals.find(x => x.id === el.dataset.gid);
+    const s = g.steps.find(x => x.id === el.dataset.sid);
+    s.done = !s.done;
+    const wasDone = !!g.doneAt;
+    if (goalDone(g)) {
+      g.doneAt = g.doneAt || Date.now();
+      if (focusGoalId === g.id) focusGoalId = null; // 完成后自动跳到下一个目标
+      const next = state.goals.find(x => !goalDone(x));
+      toast(next ? `🎉 目标「${g.name}」完成！下一个：${next.name}` : `🎉 目标「${g.name}」完成！所有计划都达成了`);
+    } else if (wasDone) {
+      g.doneAt = null; // 取消勾选则重新打开目标
+    }
+    saveState(); renderAll();
+    if (s.done) celebrateCircle(`.circle[data-sid="${s.id}"]`);
+  } else if (act === 'goal-focus') {
+    focusGoalId = (focusGoalId === el.dataset.id) ? null : el.dataset.id;
+    renderAll();
+  } else if (act === 'goal-del') {
+    const g = state.goals.find(x => x.id === el.dataset.id);
+    if (confirm(`确定删除计划「${g.name}」吗？`)) {
+      state.goals = state.goals.filter(x => x.id !== g.id);
+      if (focusGoalId === g.id) focusGoalId = null;
+      saveState(); renderAll();
+      toast('计划已删除');
+    }
+  } else if (act === 'goal-add') {
+    openGoalModal();
+  } else if (act === 'goal-edit') {
+    openGoalModal(el.dataset.id);
+  } else if (act === 'step') {
+    const iso = todayISO(), t = state.tasks.find(x => x.id === el.dataset.id);
+    const r = recOf(iso, t.id);
+    const wasDone = !!(r && r.done);
+    const p = (r ? r.p : 0) + Number(el.dataset.delta);
+    updateRecord(iso, t.id, { p });
+    renderAll();
+    if (!wasDone && (recOf(iso, t.id) || {}).done) celebrateCircle(`.note-item .circle[data-id="${t.id}"]`);
+  } else if (act === 'sel-day') {
+    selDate = el.dataset.date;
+    renderAll();
+  } else if (act === 'cal-prev') {
+    calM--; if (calM < 0) { calM = 11; calY--; }
+    renderAll();
+  } else if (act === 'cal-next') {
+    calM++; if (calM > 11) { calM = 0; calY++; }
+    renderAll();
+  }
+});
+
+main.addEventListener('change', e => {
+  const el = e.target;
+  if (el.dataset && el.dataset.input === 'progress') {
+    const t = state.tasks.find(x => x.id === el.dataset.id);
+    let v = Math.floor(Number(el.value) || 0);
+    v = Math.max(0, Math.min(v, t.target));
+    updateRecord(todayISO(), t.id, { p: v });
+    renderAll();
+  } else if (el.dataset && el.dataset.input === 'goal-step') {
+    const g = state.goals.find(x => x.id === el.dataset.gid);
+    const text = el.value.trim();
+    if (!g || !text) return;
+    g.steps.push({ id: newStepId(), text, done: false });
+    saveState(); renderAll();
+  }
+});
+
+// 输入过程中实时更新圆点/进度显示（不重渲染，保持输入焦点）
+main.addEventListener('input', e => {
+  const el = e.target;
+  if (!el.dataset || el.dataset.input !== 'progress') return;
+  const t = state.tasks.find(x => x.id === el.dataset.id);
+  const v = Math.max(0, Math.min(Math.floor(Number(el.value) || 0), t.target));
+  updateRecord(todayISO(), t.id, { p: v });
+  const expand = el.closest('.note-expand');
+  const item = expand ? expand.previousElementSibling : null;
+  if (!item) return;
+  const r = recOf(todayISO(), t.id);
+  item.classList.toggle('done', r.done);
+  const pill = item.querySelector('.note-pill');
+  if (pill) pill.textContent = r.done ? `✓ ${r.at ? fmtTime(r.at) : ''}` : `${r.p}/${t.target} ${esc(t.unit)}`;
+  const fill = expand.querySelector('.bar-fill');
+  if (fill) fill.style.width = (pctOf(t, r) * 100).toFixed(1) + '%';
+});
+
+// 热力图悬浮提示
+const tooltip = document.getElementById('tooltip');
+main.addEventListener('mouseover', e => {
+  const cell = e.target.closest('[data-tip]');
+  if (!cell) { tooltip.style.display = 'none'; return; }
+  tooltip.textContent = cell.dataset.tip;
+  tooltip.style.display = 'block';
+});
+main.addEventListener('mousemove', e => {
+  if (tooltip.style.display === 'block') {
+    tooltip.style.left = Math.min(e.clientX + 12, window.innerWidth - tooltip.offsetWidth - 8) + 'px';
+    tooltip.style.top = (e.clientY + 14) + 'px';
+  }
+});
+main.addEventListener('mouseout', e => {
+  if (e.target.closest && e.target.closest('[data-tip]')) tooltip.style.display = 'none';
+});
+
+/* ================= 事件：顶栏 ================= */
+document.getElementById('btnAdd').addEventListener('click', () => openTaskModal());
+document.getElementById('btnTheme').addEventListener('click', () => {
+  state.settings.theme = state.settings.theme === 'dark' ? 'light' : 'dark';
+  saveState(); applyTheme();
+});
+document.getElementById('btnSettings').addEventListener('click', openSettings);
+
+function applyTheme() {
+  const dark = state.settings.theme === 'dark';
+  document.body.classList.toggle('dark', dark);
+  document.getElementById('btnTheme').textContent = dark ? '☀️' : '🌙';
+}
+
+/* ================= 弹窗 ================= */
+const modalRoot = document.getElementById('modalRoot');
+function closeModal() { modalRoot.innerHTML = ''; }
+modalRoot.addEventListener('click', e => {
+  if (e.target.classList.contains('overlay') || e.target.classList.contains('close-x')) closeModal();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function openTaskModal(editId) {
+  const t = editId ? state.tasks.find(x => x.id === editId) : null;
+  const icon = t ? t.icon : EMOJIS[0];
+  const type = t ? t.type : 'check';
+  const emojiBtns = EMOJIS.map(e2 =>
+    `<button type="button" data-emoji="${e2}" class="${e2 === icon ? 'sel' : ''}">${e2}</button>`).join('');
+  modalRoot.innerHTML = `<div class="overlay"><div class="modal">
+    <h3>${t ? '编辑任务' : '新建任务'}<button class="close-x">✕</button></h3>
+    <div class="field"><label>任务名称</label>
+      <input type="text" id="f-name" value="${t ? esc(t.name) : ''}" placeholder="例如：背单词" maxlength="20"></div>
+    <div class="field"><label>图标</label><div class="emoji-grid" id="f-emojis">${emojiBtns}</div></div>
+    <div class="field"><label>完成方式</label>
+      <div class="radio-row" id="f-type">
+        <label class="${type === 'check' ? 'sel' : ''}"><input type="radio" name="type" value="check" ${type === 'check' ? 'checked' : ''}>定性打卡（完成即勾选）</label>
+        <label class="${type === 'num' ? 'sel' : ''}"><input type="radio" name="type" value="num" ${type === 'num' ? 'checked' : ''}>定量目标（达到数值才算完成）</label>
+      </div></div>
+    <div class="field only-num" ${type === 'num' ? '' : 'style="display:none"'}><label>每日目标值</label>
+      <input type="number" id="f-target" min="1" value="${t && t.type === 'num' ? t.target : ''}" placeholder="例如：50"></div>
+    <div class="field only-num" ${type === 'num' ? '' : 'style="display:none"'}><label>单位</label>
+      <input type="text" id="f-unit" value="${t && t.type === 'num' ? esc(t.unit) : ''}" placeholder="例如：个 / 步 / 分钟" maxlength="6"></div>
+    <div class="field"><label>时间段（可选，像日历事件一样显示在时间轴上）</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="time" id="f-start" value="${t && t.start ? t.start : ''}" style="flex:1">
+        <span style="color:var(--muted)">–</span>
+        <input type="time" id="f-end" value="${t && t.end ? t.end : ''}" style="flex:1">
+      </div></div>
+    <div class="field"><label>地点（可选）</label>
+      <input type="text" id="f-loc" value="${t && t.location ? esc(t.location) : ''}" placeholder="例如：实验室 / 会议室 / 健身房" maxlength="20"></div>
+    <div class="field"><label>关联链接（可选，清单里点 🔗 直接打开）</label>
+      <input type="text" id="f-link" value="${t && t.link ? esc(t.link) : ''}" placeholder="https://… 或 obsidian://… / vscode://… 等协议链接" maxlength="300"></div>
+    <div class="modal-actions">
+      ${t ? '<button class="btn-ghost btn-danger" id="f-del">删除任务</button>' : ''}
+      <button class="btn-ghost" id="f-cancel">取消</button>
+      <button class="btn-confirm" id="f-save">保存</button>
+    </div>
+  </div></div>`;
+
+  let selIcon = icon;
+  modalRoot.querySelector('#f-emojis').addEventListener('click', e => {
+    const b = e.target.closest('[data-emoji]');
+    if (!b) return;
+    selIcon = b.dataset.emoji;
+    modalRoot.querySelectorAll('#f-emojis button').forEach(x => x.classList.toggle('sel', x === b));
+  });
+  modalRoot.querySelector('#f-type').addEventListener('change', () => {
+    const v = modalRoot.querySelector('input[name=type]:checked').value;
+    modalRoot.querySelectorAll('.only-num').forEach(x => x.style.display = v === 'num' ? '' : 'none');
+    modalRoot.querySelectorAll('#f-type label').forEach(l => l.classList.toggle('sel', l.querySelector('input').checked));
+  });
+  modalRoot.querySelector('#f-cancel').addEventListener('click', closeModal);
+  modalRoot.querySelector('#f-save').addEventListener('click', () => {
+    const name = modalRoot.querySelector('#f-name').value.trim();
+    if (!name) { toast('请填写任务名称'); return; }
+    const vType = modalRoot.querySelector('input[name=type]:checked').value;
+    const vStart = modalRoot.querySelector('#f-start').value || null;
+    const vEnd = modalRoot.querySelector('#f-end').value || null;
+    if (vStart && vEnd && vEnd <= vStart) { toast('结束时间要晚于开始时间'); return; }
+    const vLoc = modalRoot.querySelector('#f-loc').value.trim();
+    const vLink = modalRoot.querySelector('#f-link').value.trim();
+    let vTarget = 1, vUnit = '次';
+    if (vType === 'num') {
+      vTarget = Math.floor(Number(modalRoot.querySelector('#f-target').value) || 0);
+      if (vTarget <= 0) { toast('请填写大于 0 的目标值'); return; }
+      vUnit = modalRoot.querySelector('#f-unit').value.trim() || '次';
+    }
+    if (t) {
+      Object.assign(t, { name, icon: selIcon, type: vType, target: vTarget, unit: vUnit, start: vStart, end: vEnd, location: vLoc, link: vLink, updatedAt: Date.now() });
+    } else {
+      state.tasks.push({ id: taskId(), name, icon: selIcon, type: vType, target: vTarget, unit: vUnit, start: vStart, end: vEnd, location: vLoc, link: vLink, createdAt: todayISO(), deletedAt: null });
+    }
+    saveState(); closeModal(); renderAll();
+    toast(t ? '任务已更新' : '任务已创建');
+  });
+  const delBtn = modalRoot.querySelector('#f-del');
+  if (delBtn) delBtn.addEventListener('click', () => {
+    if (!confirm(`确定删除任务「${t.name}」吗？\n删除后从今天起不再显示，历史记录保留。`)) return;
+    t.deletedAt = todayISO();
+    saveState(); closeModal(); renderAll();
+    toast('任务已删除');
+  });
+  modalRoot.querySelector('#f-name').focus();
+}
+
+function habitScore(t) {
+  // 执行情况：完成天数 / 计划天数（创建日至今天，已删除则到删除日；暂停日不计）
+  const end = t.deletedAt && t.deletedAt < todayISO() ? t.deletedAt : todayISO();
+  let total = 0, done = 0;
+  for (let d = parseISO(t.createdAt); fmtDate(d) <= end; d = addDays(d, 1)) {
+    if (isPausedOn(t, fmtDate(d))) continue;
+    total++;
+    const r = recOf(fmtDate(d), t.id);
+    if (r && r.done) done++;
+  }
+  return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
+}
+
+function openHabitsModal() {
+  const tasks = state.tasks.filter(t => !t.deletedAt)
+    .slice()
+    .sort((a, b) => (isPausedOn(a, todayISO()) ? 1 : 0) - (isPausedOn(b, todayISO()) ? 1 : 0)); // 暂停中的排后面
+  let rows = '';
+  for (const t of tasks) {
+    const meta = [];
+    meta.push(t.type === 'num' ? `定量目标 · ${t.target} ${esc(t.unit)}` : '定性打卡');
+    if (t.start) meta.push(`⏰ ${t.start}${t.end ? '–' + t.end : ''}`);
+    if (t.location) meta.push(`📍 ${esc(t.location)}`);
+    const sc = habitScore(t);
+    const pausedNow = isPausedOn(t, todayISO());
+    let controls, pausedBadge = '';
+    if (pausedNow) {
+      controls = `<button class="habit-act" data-action="habit-resume" data-id="${t.id}" title="恢复">▶️</button>`;
+      pausedBadge = `<div class="habit-paused">⏸ 已暂停（点击 ▶️ 恢复）</div>`;
+    } else {
+      controls = `<button class="habit-act" data-action="habit-pause" data-id="${t.id}" title="暂停">⏸</button>`;
+    }
+    rows += `<div class="habit-row ${pausedNow ? 'paused' : ''}">
+      <span class="habit-icon">${t.icon}</span>
+      <div class="habit-info">
+        <div class="habit-name">${esc(t.name)}</div>
+        <div class="habit-meta">${meta.join(' · ')}${pausedNow ? '' : ` · ✅ ${sc.done}/${sc.total} 天`}</div>
+        ${pausedBadge}
+      </div>
+      ${pausedNow ? '' : `<span class="habit-score" style="color:${sc.pct >= 80 ? 'var(--accent)' : 'var(--muted)'}">${sc.pct}%</span>`}
+      <button class="habit-act" data-action="habit-edit" data-id="${t.id}" title="编辑">✏️</button>
+      ${controls}
+      ${pausedNow ? '' : `<button class="habit-act" data-action="habit-del" data-id="${t.id}" title="删除">🗑️</button>`}
+    </div>`;
+  }
+  if (!tasks.length) rows = '<div class="tl-empty" style="padding:8px 0">还没有习惯，点下面新建一个吧</div>';
+  modalRoot.innerHTML = `<div class="overlay"><div class="modal">
+    <h3>🔥 习惯管理（${tasks.length} 个）<button class="close-x">✕</button></h3>
+    <div class="habit-list">${rows}</div>
+    <div class="modal-actions"><button class="btn-confirm" id="habit-add" style="flex:1">＋ 新习惯</button></div>
+  </div></div>`;
+  modalRoot.querySelector('.habit-list').addEventListener('click', e => {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    const id = el.dataset.id;
+    if (el.dataset.action === 'habit-edit') {
+      closeModal();
+      openTaskModal(id);
+    } else if (el.dataset.action === 'habit-del') {
+      const t = state.tasks.find(x => x.id === id);
+      if (!confirm(`确定删除习惯「${t.name}」吗？\n删除后不再出现，历史记录保留。`)) return;
+      t.deletedAt = todayISO();
+      saveState();
+      openHabitsModal(); // 刷新列表
+      renderAll();
+      toast('习惯已删除');
+    } else if (el.dataset.action === 'habit-pause') {
+      const t = state.tasks.find(x => x.id === id);
+      t.paused = true;
+      saveState();
+      openHabitsModal();
+      renderAll();
+      toast(`「${t.name}」已暂停，▶️ 可恢复`);
+    } else if (el.dataset.action === 'habit-resume') {
+      const t = state.tasks.find(x => x.id === id);
+      t.paused = false; t.pausedUntil = null;
+      saveState();
+      openHabitsModal();
+      renderAll();
+      toast(`「${t.name}」已恢复`);
+    }
+  });
+  modalRoot.querySelector('#habit-add').addEventListener('click', () => {
+    closeModal();
+    openTaskModal();
+  });
+}
+
+function openGoalModal(editId) {
+  const g = editId ? state.goals.find(x => x.id === editId) : null;
+  modalRoot.innerHTML = `<div class="overlay"><div class="modal">
+    <h3>${g ? '编辑计划' : '新建计划'}<button class="close-x">✕</button></h3>
+    <div class="field"><label>目标名称</label>
+      <input type="text" id="g-name" value="${g ? esc(g.name) : ''}" placeholder="例如：完成毕业论文" maxlength="30"></div>
+    <div class="field"><label>截止日期（可选）</label>
+      <input type="date" id="g-date" value="${g && g.deadline ? g.deadline : ''}"></div>
+    <div class="field"><label>子任务（一行一个，按顺序执行）</label>
+      <textarea id="g-steps" rows="5" placeholder="确定选题&#10;文献综述&#10;完成初稿">${g ? esc(g.steps.map(s => s.text).join('\n')) : ''}</textarea></div>
+    <div class="modal-actions">
+      ${g ? '<button class="btn-ghost btn-danger" id="g-del">删除计划</button>' : ''}
+      <button class="btn-ghost" id="g-cancel">取消</button>
+      <button class="btn-confirm" id="g-save">保存</button>
+    </div>
+  </div></div>`;
+  modalRoot.querySelector('#g-cancel').addEventListener('click', closeModal);
+  modalRoot.querySelector('#g-save').addEventListener('click', () => {
+    const name = modalRoot.querySelector('#g-name').value.trim();
+    if (!name) { toast('请填写目标名称'); return; }
+    const date = modalRoot.querySelector('#g-date').value || null;
+    const lines = modalRoot.querySelector('#g-steps').value.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 20);
+    if (g) {
+      g.name = name; g.deadline = date;
+      g.steps = lines.map(t => {
+        const old = g.steps.find(s => s.text === t);
+        return { id: old ? old.id : newStepId(), text: t, done: old ? old.done : false };
+      });
+      if (!goalDone(g)) g.doneAt = null;
+      toast('计划已更新');
+    } else {
+      state.goals.push({
+        id: 'g' + Date.now() + Math.random().toString(36).slice(2, 5),
+        name, deadline: date, createdAt: todayISO(), doneAt: null,
+        steps: lines.map(t => ({ id: newStepId(), text: t, done: false })),
+      });
+      toast('计划已创建');
+    }
+    saveState(); closeModal(); renderAll();
+  });
+  const delBtn = modalRoot.querySelector('#g-del');
+  if (delBtn) delBtn.addEventListener('click', () => {
+    if (!confirm(`确定删除计划「${g.name}」吗？`)) return;
+    state.goals = state.goals.filter(x => x.id !== g.id);
+    if (focusGoalId === g.id) focusGoalId = null;
+    saveState(); closeModal(); renderAll();
+    toast('计划已删除');
+  });
+  modalRoot.querySelector('#g-name').focus();
+}
+
+function openSettings() {
+  modalRoot.innerHTML = `<div class="overlay"><div class="modal">
+    <h3>设置 & 数据<button class="close-x">✕</button></h3>
+    <div class="set-row"><div>导出备份<div class="desc">下载全部数据的 JSON 文件</div></div>
+      <button class="nav-btn" id="s-export">导出</button></div>
+    <div class="set-row"><div>导入备份<div class="desc">用备份文件覆盖当前数据</div></div>
+      <button class="nav-btn" id="s-import">导入</button>
+      <input type="file" id="s-file" accept=".json" style="display:none"></div>
+    <div class="set-row"><div>清空全部数据<div class="desc">删除所有任务与打卡记录</div></div>
+      <button class="nav-btn btn-danger" id="s-clear">清空</button></div>
+    <div class="set-row"><div>数据存储<div class="desc">所有数据保存在本浏览器 localStorage 中，不会上传，请定期导出备份；换浏览器或清除浏览器数据前记得先导出。</div></div></div>
+  </div></div>`;
+  modalRoot.querySelector('#s-export').addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'self-discipline-backup-' + todayISO() + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  modalRoot.querySelector('#s-import').addEventListener('click', () => modalRoot.querySelector('#s-file').click());
+  modalRoot.querySelector('#s-file').addEventListener('change', e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const d = JSON.parse(reader.result);
+        if (!(Array.isArray(d.tasks) && d.records && typeof d.records === 'object')) throw new Error('bad');
+        state = d; saveState(); applyTheme(); closeModal(); renderAll();
+        toast('导入成功');
+      } catch (err) { toast('文件格式不正确，导入失败'); }
+    };
+    reader.readAsText(f);
+  });
+  modalRoot.querySelector('#s-clear').addEventListener('click', () => {
+    if (!confirm('确定清空全部任务和打卡记录吗？此操作不可恢复！')) return;
+    state = seedState(); saveState(); applyTheme(); closeModal(); renderAll();
+    toast('已清空，恢复为示例任务');
+  });
+}
+
+/* ================= 提示条 ================= */
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+/* ================= 启动 ================= */
+applyTheme();
+renderAll();
+if (state.focus) startTicker(); // 恢复上次未结束的专注计时
+
+/* PWA：注册 Service Worker（仅 http/https 下生效，file:// 打开时自动跳过） */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
