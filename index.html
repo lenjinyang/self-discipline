@@ -496,7 +496,10 @@ function loadState() {
   } catch (e) { /* 数据损坏时重置 */ }
   return null;
 }
-function saveState() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+function saveState() {
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  scheduleNutstoreSync(); // 已连接坚果云文件夹时自动备份
+}
 state = loadState() || seedState();
 if (!Array.isArray(state.goals)) state.goals = []; // 旧数据迁移
 state.tasks = state.tasks.filter(t => t.repeat !== 'once'); // 「仅某一天」已移除，清理旧的一次性任务
@@ -532,6 +535,121 @@ function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function taskId() { return 't' + Date.now() + Math.random().toString(36).slice(2, 6); }
+
+/* ================= 坚果云同步（读写同步文件夹 + 多设备合并） ================= */
+const NC_FILE = 'self-discipline-backup.json';
+var ncDirHandle = null, ncSyncTimer = null, ncSyncing = false; // var：saveState 在声明前就会触发调度
+const fsaSupported = 'showDirectoryPicker' in window;
+
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open('selfdisc-fs', 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore('kv');
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function idbSet(key, val) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put(val, key);
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction('kv', 'readonly');
+    const rq = tx.objectStore('kv').get(key);
+    rq.onsuccess = () => res(rq.result || null); rq.onerror = () => rej(rq.error);
+  });
+}
+async function ncLoadHandle() {
+  ncDirHandle = await idbGet('ncDir');
+  if (ncDirHandle) scheduleNutstoreSync();
+}
+function scheduleNutstoreSync() {
+  if (!ncDirHandle || ncSyncing) return;
+  clearTimeout(ncSyncTimer);
+  ncSyncTimer = setTimeout(() => doNutstoreSync('auto'), 2000);
+}
+async function ncHasPermission() {
+  return (await ncDirHandle.queryPermission({ mode: 'readwrite' })) === 'granted';
+}
+async function writeNCFile(fh) {
+  const w = await fh.createWritable();
+  await w.write(JSON.stringify({ app: 'self-discipline', exportedAt: new Date().toISOString(), state }, null, 2));
+  await w.close();
+}
+async function doNutstoreSync(mode) {
+  if (!ncDirHandle || ncSyncing) return;
+  if (!(await ncHasPermission())) {
+    if (mode === 'auto') { toast('坚果云文件夹权限已过期，请在设置里点一次「立即同步」重新授权'); return; }
+    if ((await ncDirHandle.requestPermission({ mode: 'readwrite' })) !== 'granted') { toast('未获得文件夹读写权限'); return; }
+  }
+  ncSyncing = true;
+  try {
+    const fh = await ncDirHandle.getFileHandle(NC_FILE, { create: true });
+    let remoteState = null;
+    try {
+      const f = await fh.getFile();
+      if (f.size) {
+        const parsed = JSON.parse(await f.text());
+        remoteState = parsed && parsed.state ? parsed.state : parsed;
+      }
+    } catch (err) { /* 文件不存在或为空则视为无远端数据 */ }
+    if (remoteState && (remoteState.tasks || remoteState.records)) {
+      const before = JSON.stringify(state);
+      state = mergeStates(state, remoteState);
+      if (JSON.stringify(state) !== before) { saveState(); renderAll(); }
+    }
+    await writeNCFile(fh);
+    if (mode !== 'auto') toast('✅ 已同步到坚果云文件夹');
+  } catch (e) {
+    toast('坚果云同步失败：' + ((e && e.message) || e));
+  } finally {
+    ncSyncing = false;
+  }
+}
+function mergeStates(local, remote) {
+  if (!remote || typeof remote !== 'object') return local;
+  const merged = JSON.parse(JSON.stringify(local));
+  // 任务：按 id 合并，updatedAt 新者胜
+  const tm = new Map(merged.tasks.map(t => [t.id, t]));
+  for (const rt of remote.tasks || []) {
+    const lt = tm.get(rt.id);
+    if (!lt) tm.set(rt.id, rt);
+    else if ((rt.updatedAt || 0) > (lt.updatedAt || 0)) Object.assign(lt, rt);
+  }
+  merged.tasks = [...tm.values()];
+  // 计划：按 id 合并；子任务按文本并集（完成取或）；名称/截止留本地优先
+  const gm = new Map((merged.goals || []).map(g => [g.id, g]));
+  for (const rg of remote.goals || []) {
+    const lg = gm.get(rg.id);
+    if (!lg) { gm.set(rg.id, rg); continue; }
+    lg.name = lg.name || rg.name;
+    lg.deadline = lg.deadline || rg.deadline;
+    lg.doneAt = lg.doneAt || rg.doneAt;
+    const sm = new Map((lg.steps || []).map(s => [s.text, s]));
+    for (const rs of rg.steps || []) {
+      const ls = sm.get(rs.text);
+      if (!ls) sm.set(rs.text, rs);
+      else ls.done = ls.done || rs.done;
+    }
+    lg.steps = [...sm.values()];
+  }
+  merged.goals = [...gm.values()];
+  // 记录：同一天同一任务，updatedAt 新者胜（相同则保留本地）
+  for (const [iso, recs] of Object.entries(remote.records || {})) {
+    merged.records[iso] = merged.records[iso] || {};
+    for (const [tid, r] of Object.entries(recs)) {
+      const lr = merged.records[iso][tid];
+      if (!lr || ((r.updatedAt || 0) > (lr.updatedAt || 0))) merged.records[iso][tid] = r;
+    }
+  }
+  return merged;
+}
 
 /* ================= 打勾庆祝动画 ================= */
 function burstAt(rect, count) {
@@ -1421,6 +1539,11 @@ function openSettings() {
   }
   modalRoot.innerHTML = `<div class="overlay"><div class="modal">
     <h3>设置 & 数据<button class="close-x">✕</button></h3>
+    ${fsaSupported ? `<div class="set-row"><div>☁️ 坚果云同步（电脑端）<div class="desc" id="nc-status">${ncDirHandle ? '已连接文件夹「' + esc(ncDirHandle.name) + '」，打卡后自动备份，坚果云客户端会自动上传云端' : '未配置 · 选择你的坚果云同步文件夹（如 D:\\我的坚果云），打卡数据自动备份为其中 JSON 并随坚果云上传；换设备点「立即同步」智能合并两边的记录。手机端无文件夹权限，用导出/导入中转。'}</div></div>
+      <div style="display:flex;gap:6px;flex-shrink:0;margin-left:8px">
+        <button class="nav-btn" id="nc-pick">${ncDirHandle ? '更换' : '选择文件夹'}</button>
+        ${ncDirHandle ? '<button class="nav-btn" id="nc-now">立即同步</button>' : ''}
+      </div></div>` : ''}
     <div class="set-row"><div>💻 电脑一键启动应用（Windows · 可选）<div class="desc">一次性配置 openapp:// 协议后，绑定「本机软件路径」的任务（如 C:\...\Typora.exe）就能在清单里 🚀 一键启动并自动计时。步骤：下载 openapp.reg → 双击导入 → 弹窗点「是」。仅限 Windows 电脑，手机无需此配置。</div></div>
       <button class="nav-btn" id="s-reg">下载 .reg</button></div>
     <div class="set-row"><div>导出备份<div class="desc">下载全部数据的 JSON 文件</div></div>
@@ -1441,6 +1564,19 @@ function openSettings() {
     URL.revokeObjectURL(a.href);
     toast('openapp.reg 已下载，双击导入注册表');
   });
+  if (fsaSupported) {
+    modalRoot.querySelector('#nc-pick').addEventListener('click', async () => {
+      try {
+        ncDirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+        await idbSet('ncDir', ncDirHandle);
+        toast('已连接「' + ncDirHandle.name + '」，开始同步…');
+        await doNutstoreSync('manual');
+        openSettings(); // 刷新状态显示
+      } catch (e) { /* 用户取消选择 */ }
+    });
+    const nowBtn = modalRoot.querySelector('#nc-now');
+    if (nowBtn) nowBtn.addEventListener('click', () => doNutstoreSync('manual'));
+  }
   modalRoot.querySelector('#s-export').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -1485,6 +1621,7 @@ function toast(msg) {
 applyTheme();
 renderAll();
 if (state.focus) startTicker(); // 恢复上次未结束的专注计时
+ncLoadHandle(); // 恢复坚果云同步文件夹并自动备份
 
 /* PWA：注册 Service Worker（仅 http/https 下生效，file:// 打开时自动跳过） */
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
